@@ -73,6 +73,7 @@ module Thin
     # Raises a +InvalidRequest+ if invalid.
     # Returns +true+ if the parsing is complete.
     def parse(data)
+      status = false
       if @parser.finished?  # Header finished, can only be some more body
         body << data
       else                  # Parse more header using the super parser
@@ -80,6 +81,15 @@ module Thin
         raise InvalidRequest, 'Header longer than allowed' if @data.size > MAX_HEADER
 
         @nparsed = @parser.execute(@env, @data, @nparsed)
+
+        if @parser.finished? 
+          if @env["HTTP_VERSION"] == "HTTP/1.1" &&
+              @env["SERVER_PROTOCOL"] == "HTTP/1.1" &&
+              @env["HTTP_EXPECT"] == "100-continue"
+            status = "100-continue"
+            # require 'pp'; pp @env
+          end
+        end
 
         # Transfert to a tempfile if body is very big
         move_body_to_tempfile if @parser.finished? && content_length > MAX_BODY
@@ -89,10 +99,9 @@ module Thin
       if finished?   # Check if header and body are complete
         @data = nil
         @body.rewind
-        true         # Request is fully parsed
-      else
-        false        # Not finished, need more data
+        status = true         # Request is fully parsed
       end
+      status
     end
 
     # +true+ if headers and body are finished parsing

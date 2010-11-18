@@ -36,10 +36,24 @@ module Thin
       @response = Response.new
     end
 
+  def stamp string
+    time = Time.now
+    sec = time.to_i % 1000
+    ms = (time.usec / 1000).to_i
+    puts sec.to_s + "." + ("%03d"%ms) + " " + string
+  end
+
     # Called when data is received from the client.
     def receive_data(data)
+      # stamp "receive"
       trace { data }
-      process if @request.parse(data)
+      parse_result = @request.parse(data)
+      case parse_result
+      when true; process
+      when "100-continue"
+        send_data "HTTP/1.1 100 Continue\n\n"
+      else;
+      end
     rescue InvalidRequest => e
       log "!! Invalid request"
       log_error e
